@@ -4,6 +4,9 @@ const axios = require('axios')
 const mysql = require('mysql')
 const fs = require('fs')
 const path = require('path')
+const { CrawlerHao123 } = require('./hao123')
+const cheerio = require('cheerio')
+const moment = require('moment')
 
 const app = new koa()
 const router = new Router()
@@ -12,7 +15,7 @@ const poll = mysql.createPool({
     host:'localhost',
     user:'root',
     password:'qqinsoft@youwu',
-    database:'mytestdatabases'
+    database:'myblog'
 })
 
 const query = sql => {
@@ -43,6 +46,7 @@ const sleep = (timer) => {
 }
 
 router.get('/',async (ctx,next) => {
+    return
     async function getData(page = 1){
         let data = await axios({
             type: 'get',
@@ -55,25 +59,33 @@ router.get('/',async (ctx,next) => {
         return data
     }
     let res
-    for(let i = 1;i<300;i++){
+    let IS_NONE = false
+    for(let i = 1;i<100;i++){
         res = await getData(i)
         try{
             if(typeof(res.data) === 'string'){
-                let replace = res.data.replace(/[\\\' | 搭配\"装\"甜] |/g,'')
+                let replace = res.data.replace(/[\\\']/g,'')
                 res = JSON.parse(replace)
             }else{
                 res = res.data
             }
-            res.data.forEach(async item => {
+            res.data.forEach(async (item,index) => {
                 if(item.thumbURL && item.fromPageTitleEnc){
                     const lastIndex = item.thumbURL.lastIndexOf('.')
                     await downloadFile(item.thumbURL,`./image/2018-${i}`,`${item.fromPageTitleEnc.replace(/[\:|#|\"|*| |\?|\？|\\|\>]/g,'')}${(item.thumbURL).slice(lastIndex)}`)
+                }else{
+                    if(index < 30){
+                        IS_NONE = true
+                    }
                 }
             })
+            if(IS_NONE){
+                console.log('爬完了')
+                break
+            }
             console.log(`已经下载了${i * 30}张图片`)
         }catch(e){
             console.log('出错了')
-            break
         }
         await sleep(1500)
     }
@@ -83,7 +95,6 @@ router.get('/',async (ctx,next) => {
 
 
 function mkdirs(dirpath){
-    const dirname1 = path.dirname(dirpath)
     
     if (!fs.existsSync(path.dirname(dirpath))) {
         mkdirs(path.dirname(dirpath))
@@ -95,7 +106,6 @@ function mkdirs(dirpath){
 }
 
 async function downloadFile(url,filepath,name){
-
     mkdirs(path.resolve(filepath))
 
     let res = await axios({
@@ -115,14 +125,46 @@ async function downloadFile(url,filepath,name){
         writer.on('finish',resolve)
         writer.on('error',reject)
     })
-    
 }
 
 router.get('/select',async (ctx,next) => {
-    let sql = `SELECT * FROM test`
-    let res = await(query(sql))
-    console.log(res)
-    ctx.body = res
+    let mumber = 0
+    for(let i = 1;i<4000;i++){
+        let res = await CrawlerHao123(i)
+        res = res.data.slice(res.data.indexOf('{'),res.data.lastIndexOf(')'))
+        res = JSON.parse(res)
+
+        let sql = `INSERT INTO article_crawler (title,url,content,intro,author,add_time,article_img,article_thump) VALUES `
+
+        res.data.forEach(async e => {
+            let article_img = e.tplName === 'noneImg' ? '' : e.img0_l
+            let article_thump = e.tplName === 'noneImg' ? '' : e.img0
+            let time = moment.unix(e.time).format('YYYY-MM-DD HH:mm:ss')
+            let content = e.url
+            // let content = await axios({
+            //     url: e.url,
+            //     type: 'get'
+            // })
+            // let $ = cheerio.load(content.data)
+            // content = $('#left-container .article-content').html()
+
+            sql += `('${e.title}','${content}','${content}','${e.desc}','${e.source}','${time}','${article_img}','${article_thump}'),`
+            mumber++
+        })
+
+        sql = sql.slice(0,sql.length-1)
+        try{
+            let dataList = await query(sql)
+        }catch(e){
+
+        }
+        
+        console.log(`爬取了${i}次---${mumber}条数据`)
+        await sleep(1000)
+    }
+    ctx.body = '爬完了'
+
+    
 })
 
 
