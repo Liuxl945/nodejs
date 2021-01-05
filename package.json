@@ -17,7 +17,7 @@
   },
   "homepage": "https://github.com/Liuxl945/nodejs#readme",
   "dependencies": {
-    "axios": "^0.19.0",
+    "axios": "^0.21.1",
     "cheerio": "^1.0.0-rc.3",
     "koa": "^2.7.0",
     "koa-router": "^7.4.0",
